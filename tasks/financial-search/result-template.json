@@ -1,0 +1,63 @@
+{
+  "run_id": null,
+  "case_id": null,
+  "engine_id": null,
+  "metric_id": null,
+  "execution_mode": null,
+  "status": null,
+  "reason_code": null,
+  "freshness": null,
+  "freshness_basis": null,
+  "identity": {
+    "name": null,
+    "symbol": null,
+    "market": null,
+    "provider": null
+  },
+  "value": {
+    "display": null,
+    "normalized_decimal": null,
+    "lower_decimal": null,
+    "upper_decimal": null,
+    "unit": null,
+    "classification": null
+  },
+  "quote_context": {
+    "quote_type": null,
+    "session": null,
+    "market_status": null,
+    "delay_status": null,
+    "extended_session_value": null
+  },
+  "time": {
+    "requested_as_of_utc": null,
+    "observed_at_utc": null,
+    "source_time_text": null,
+    "source_data_time_utc": null,
+    "source_timezone": null,
+    "announcement_date": null,
+    "effective_date": null,
+    "source_time_precision": null
+  },
+  "search": {
+    "query": null,
+    "search_url": null,
+    "results_frame_id": null,
+    "result_target_id": null
+  },
+  "source": {
+    "url": null,
+    "publisher": null,
+    "original_publisher": null,
+    "evidence_origin": null
+  },
+  "evidence": [],
+  "corroborating_sources": [],
+  "conflicts": [],
+  "execution": {
+    "decisions": 0,
+    "input_attempts": 0,
+    "elapsed_ms": null,
+    "last_confirmed_state": null
+  }
+}

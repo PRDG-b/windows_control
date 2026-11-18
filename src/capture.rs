@@ -1,8 +1,8 @@
+use image::RgbImage;
 use std::fs;
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
-use image::RgbImage;
 
 pub struct ScreenCapture {
     device_path: String,
@@ -11,25 +11,32 @@ pub struct ScreenCapture {
 }
 
 impl ScreenCapture {
-
     // 캡처하고 있는 화면의 해상도 감지
-    pub fn detect_resolution(device_path: &str) -> Result<(u16, u16), String>{
-        let output = Command::new("v4l2-ctl")
+    pub fn detect_resolution(device_path: &str) -> Result<(u16, u16), String> {
+        let output = Command::new("timeout")
+            .args(["3s", "v4l2-ctl"])
             .arg(format!("--device={}", device_path))
             .arg("--get-fmt-video")
             .output()
             .map_err(|e| format!("Fail to execute v412-ctl: {}", e))?;
 
+        if !output.status.success() {
+            return Err(format!("Resolution detection failed: {}", output.status));
+        }
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         // 출력에서 Width/Height 줄을 찾아서 파싱
         for line in stdout.lines() {
             if line.contains("Width/Height") {
-                if let Some( dims ) = line.split(":").nth(1) {
+                if let Some(dims) = line.split(":").nth(1) {
                     let parts: Vec<&str> = dims.trim().split('/').collect();
                     if parts.len() == 2 {
-                        let w = parts[0].parse::<u16>().map_err(|_| "Failed to parse resoltuion")?;
-                        let h = parts[1].parse::<u16>().map_err(|_| "Failed to parse resoltuion")?;
+                        let w = parts[0]
+                            .parse::<u16>()
+                            .map_err(|_| "Failed to parse resoltuion")?;
+                        let h = parts[1]
+                            .parse::<u16>()
+                            .map_err(|_| "Failed to parse resoltuion")?;
                         return Ok((w, h));
                     }
                 }
@@ -48,8 +55,7 @@ impl ScreenCapture {
 
     /// 캡처된 JPG 파일의 바이트 헤더를 읽어 실제 (가로, 세로) 픽셀 해상도를 반환
     pub fn get_jpeg_resolution(jpg_path: &str) -> Result<(u16, u16), String> {
-        let bytes = fs::read(jpg_path)
-            .map_err(|e| format!("Failed to read JPG File: {}", e))?;
+        let bytes = fs::read(jpg_path).map_err(|e| format!("Failed to read JPG File: {}", e))?;
 
         let mut i = 0;
         while i + 9 < bytes.len() {
@@ -57,7 +63,7 @@ impl ScreenCapture {
             if bytes[i] == 0xFF && (bytes[i + 1] == 0xC0 || bytes[i + 1] == 0xC2) {
                 // 마커 뒤 5~6번째 바이트가 세로(Height), 7~8번째 바이트가 가로(Width)입니다!
                 let height = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]);
-                let width  = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]);
+                let width = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]);
                 return Ok((width, height));
             }
             i += 1;
@@ -68,34 +74,48 @@ impl ScreenCapture {
 
     /// 화면 캡처후 메모리의 byte로
     pub fn capture_raw(&self) -> Result<Vec<u8>, String> {
-        let fmt_arg = format!("--set-fmt-video=width={},height={},pixelformat=MJPG", self.width, self.height);
+        let fmt_arg = format!(
+            "--set-fmt-video=width={},height={},pixelformat=MJPG",
+            self.width, self.height
+        );
         let device_arg = format!("--device={}", self.device_path);
 
         // v4l2-ctl 실행
         // --stream-mmap = 4: 스트림 받아 저장할 프레임 개수(Memory Map)
-        // --stream-skip = 4: 저장된 과거 프레임 4장 버림
+        // Board startup emitted 8 incomplete frames in the USB trace.
+        // Discard 30 frames before reading one. A complex 1080p frame took
+        // 4.032s with this warm-up, so allow 10s instead of the old 3s.
         // --stream-count = 1: 딱 1장만 촬영
         let output = Command::new("timeout")
-            .arg("3s")
+            .arg("10s")
             .arg("v4l2-ctl")
             .arg("--silent")
             .arg(&device_arg)
             .arg(&fmt_arg)
             .arg("--stream-mmap=4")
-            .arg("--stream-skip=4")
+            .arg("--stream-skip=30")
             .arg("--stream-count=1")
+            .arg("--stream-to=-")
             .output()
             .map_err(|e| format!("Fail to execute v412-ctl: {}", e))?;
 
         if !output.status.success() || output.stdout.is_empty() {
             let err_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Display Capture Error: {}", err_msg));
+            return Err(format!(
+                "Display Capture Error: status={}, bytes={}, detail={}",
+                output.status,
+                output.stdout.len(),
+                err_msg
+            ));
         }
 
-        Ok(output.stderr)
-
+        let image = image::load_from_memory(&output.stdout)
+            .map_err(|e| format!("Invalid capture JPEG: {e}"))?;
+        if image.width() != self.width || image.height() != self.height {
+            return Err("Capture resolution changed; recalibrate before input".into());
+        }
+        Ok(output.stdout)
     }
-
 
     // // 현재 화면을 캡처하여 지정된 경로에 jpg로 저장하고 파일 크기를 반환
     // pub fn capture_to_file(&self, output_path: &str) -> Result<usize, String> {
@@ -160,12 +180,19 @@ impl ScreenCapture {
         while start.elapsed() < timeout {
             if let Ok(img) = self.capture_image() {
                 if check_fn(&img) {
-                    println!("Screen Check Success ({:.1} sec)", start.elapsed().as_secs_f32());
+                    println!(
+                        "Screen Check Success ({:.1} sec)",
+                        start.elapsed().as_secs_f32()
+                    );
 
                     return Ok(());
                 }
             }
-            println!("Wait for Screen Capture Image... ({:1}s / {}s)", start.elapsed().as_secs_f32(), timeout_secs);
+            println!(
+                "Wait for Screen Capture Image... ({:1}s / {}s)",
+                start.elapsed().as_secs_f32(),
+                timeout_secs
+            );
             thread::sleep(Duration::from_millis(500));
         }
         Err(format!("Timeout Error: No Screen Image."))
@@ -181,14 +208,20 @@ impl ScreenCapture {
     ) -> Result<(), String> {
         self.wait_until(timeout_secs, |current_img| {
             let diff_ratio = Self::calc_diff_percent(before_img, current_img);
-            println!("  -> Screen Change Ratio: {:.1}% / {:.1}%", diff_ratio, thershold_percent);
+            println!(
+                "  -> Screen Change Ratio: {:.1}% / {:.1}%",
+                diff_ratio, thershold_percent
+            );
             diff_ratio >= thershold_percent
         })
     }
 
     /// 두 이미지 픽셀 차이를 비교해 변화율 계산
     fn calc_diff_percent(img1: &RgbImage, img2: &RgbImage) -> f32 {
-        let (w, h) = (img1.width().min(img2.width()), img1.height().min(img2.height()));
+        let (w, h) = (
+            img1.width().min(img2.width()),
+            img1.height().min(img2.height()),
+        );
         let mut changed = 0u32;
         let mut total = 0u32;
 
@@ -199,8 +232,8 @@ impl ScreenCapture {
 
                 // R, G, B 차이 합이 45 이상이면 바뀐 픽셀로 판정
                 let diff = (p1[0] as i32 - p2[0] as i32).abs()
-                         + (p1[1] as i32 - p2[1] as i32).abs()
-                         + (p1[2] as i32 - p2[2] as i32).abs();
+                    + (p1[1] as i32 - p2[1] as i32).abs()
+                    + (p1[2] as i32 - p2[2] as i32).abs();
                 if diff > 45 {
                     changed += 1;
                 }

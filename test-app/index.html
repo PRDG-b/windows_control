@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Execute and Validate Test</title>
+<style>
+body { font: 28px sans-serif; margin: 48px; background: #fff; color: #111; }
+button, select, input { font: inherit; margin: 12px; padding: 16px; }
+#status { margin: 32px; font-size: 48px; }
+#popup { border: 4px solid #333; padding: 20px; }
+</style>
+<h1>Execute and Validate</h1>
+<p>Select a scenario, press Reset, then use the Pi click command.</p>
+<label>Scenario <select id="scenario"><option>success</option><option>failure</option><option>duplicate</option><option>popup</option></select></label>
+<label>Delay milliseconds <input id="delay" type="number" min="0" max="60000" value="1500"></label>
+<button id="reset">Reset</button>
+<div id="modes"></div><div id="mode"></div>
+<div id="actions"></div><div id="status">READY</div><div id="popup" hidden>Confirm action <button id="confirm">CONFIRM</button></div>
+<p>Independent oracle: open browser console and inspect window.testState.</p>
+<script>
+let timer;
+let reports = Promise.resolve();
+window.testState = {};
+function publish() {
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+  const body = JSON.stringify(window.testState);
+  reports = reports.then(() => fetch('/events', {method: 'POST', body})).catch(console.error);
+}
+const statusNode = document.getElementById('status');
+const scenarioNode = document.getElementById('scenario');
+const delayNode = document.getElementById('delay');
+const popupNode = document.getElementById('popup');
+function finish() {
+  window.testState.phase = 'waiting'; statusNode.textContent = 'WAITING';
+  publish();
+  const scenario = scenarioNode.value;
+  timer = setTimeout(() => {
+    const success = scenario !== 'failure';
+    statusNode.textContent = success ? 'COMPLETED' : 'FAILED';
+    window.testState.phase = success ? 'completed' : 'failed';
+    publish();
+  }, Math.max(0, Math.min(60000, Number(delayNode.value) || 0)));
+}
+function reset() {
+  clearTimeout(timer); popupNode.hidden = true; statusNode.textContent = 'READY';
+  window.testState = {phase: 'ready', clicks: 0, scenario: scenarioNode.value};
+  document.getElementById('mode').textContent = scenarioNode.value.toUpperCase() + 'MODE';
+  publish();
+  const actions = document.getElementById('actions'); actions.replaceChildren();
+  for (let i = 0; i < (scenarioNode.value === 'duplicate' ? 2 : 1); i++) {
+    const button = document.createElement('button'); button.textContent = 'RUN';
+    button.onclick = () => {
+      window.testState.clicks++;
+      if (scenarioNode.value === 'popup') { popupNode.hidden = false; window.testState.phase = 'confirm'; publish(); }
+      else finish();
+    };
+    actions.append(button);
+  }
+}
+document.getElementById('confirm').onclick = () => { popupNode.hidden = true; finish(); };
+document.getElementById('reset').onclick = reset;
+for (const name of ['success', 'failure', 'duplicate', 'popup']) {
+  const button = document.createElement('button'); button.textContent = name.toUpperCase();
+  button.onclick = () => { scenarioNode.value = name; reset(); };
+  document.getElementById('modes').append(button);
+}
+scenarioNode.onchange = reset;
+reset();
+</script>
+</html>
