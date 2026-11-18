@@ -11,6 +11,30 @@ pub struct ScreenCapture {
 }
 
 impl ScreenCapture {
+    /// Explicit USB rebind inherited from the remote recovery change.
+    /// Never called automatically on capture failure. A successful rebind still
+    /// requires a fresh capture/OCR check; it does not prove HDMI recovery.
+    pub fn recover_frozen_device(&self) -> Result<(), String> {
+        let name = self
+            .device_path
+            .strip_prefix("/dev/")
+            .filter(|name| {
+                name.strip_prefix("video").is_some_and(|index| {
+                    !index.is_empty() && index.bytes().all(|b| b.is_ascii_digit())
+                })
+            })
+            .ok_or("Expected a /dev/videoN capture device")?;
+        let device = fs::canonicalize(format!("/sys/class/video4linux/{name}/device"))
+            .map_err(|_| "Cannot resolve capture USB device")?;
+        let usb_id = capture_usb_id(&device)?;
+        fs::write("/sys/bus/usb/drivers/usb/unbind", usb_id.as_bytes())
+            .map_err(|_| "USB unbind failed; recovery was not confirmed")?;
+        thread::sleep(Duration::from_millis(800));
+        fs::write("/sys/bus/usb/drivers/usb/bind", usb_id.as_bytes())
+            .map_err(|_| "USB bind failed; capture device may remain disconnected")?;
+        thread::sleep(Duration::from_millis(1500));
+        Ok(())
+    }
     // 캡처하고 있는 화면의 해상도 감지
     pub fn detect_resolution(device_path: &str) -> Result<(u16, u16), String> {
         let output = Command::new("timeout")
@@ -242,4 +266,34 @@ impl ScreenCapture {
         }
         (changed as f32 / total as f32) * 100.0
     }
+}
+
+fn capture_usb_id(device: &std::path::Path) -> Result<String, String> {
+    let usb = device
+        .ancestors()
+        .find(|p| p.join("idVendor").is_file() && p.join("idProduct").is_file())
+        .ok_or("No USB parent for capture device")?;
+    let id = usb
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or("Invalid capture USB identifier")?;
+    if !id.contains('-') || !id.bytes().all(|b| b.is_ascii_digit() || b"-.".contains(&b)) {
+        return Err("Invalid capture USB identifier".into());
+    }
+    Ok(id.into())
+}
+
+#[test]
+#[cfg(test)]
+fn usb_recovery_resolves_the_actual_capture_device_not_a_fixed_port() {
+    let root =
+        std::env::temp_dir().join(format!("windows-control-usb-parent-{}", std::process::id()));
+    let usb = root.join("1-1.2");
+    let interface = usb.join("video-interface");
+    std::fs::create_dir_all(&interface).unwrap();
+    std::fs::write(usb.join("idVendor"), "1234").unwrap();
+    std::fs::write(usb.join("idProduct"), "5678").unwrap();
+    assert_eq!(capture_usb_id(&interface).unwrap(), "1-1.2");
+    assert!(capture_usb_id(&root).is_err());
+    std::fs::remove_dir_all(root).unwrap();
 }

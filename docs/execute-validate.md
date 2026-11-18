@@ -235,3 +235,9 @@ cargo run --offline -- compare-ocr skip30-20261116-01/case-01
 - 로컬/Pi Rust 38개 테스트 통과. fmt/check/offline test/diff 검사 통과. 독립 리뷰에서 관측 예산/timeout과 복원 초점 문제를 수정하고 최종 중요 문제 없음 확인.
 - 로컬/Pi 합성 데모: 노드3/간선3/probe3/입력7/복원확인/pending0. 가상 UI 결과이며 실제 HID 성공은 아니다.
 - Pi 최신 소스 /tmp/windows-control-explore.SnsW8o에서 explore-test-web live-flow-01 1 실행: No Signal 3프레임/unknown_state/입력0. 직후 explore-final.jpg 재캡처·OCR 및 실제 이미지 확인에서도 앱 화면은 없었음(검은 화면, 직전 No Signal). 실제 앱의 전이/복원 성공은 미수행이다.
+
+### 2026-11-19: GitHub 업로드 및 원격 변경 통합
+- 로컬 실행·검증/상태 전이 탐색 구현을 커밋하고 원격 master의 1b1cb37(캡처 정지 복구 변경)을 병합했다. 기존 원격 이력은 보존한다.
+- 충돌한 main/task는 기본 도움말·명시적 입력·런타임 인증과 최신 OCR 경로를 유지한다. 원격의 USB 복구 의도는 recover_frozen_device API로 보존하되, 현재 /dev/videoN의 실제 USB 부모를 sysfs에서 찾아 사용하고 unbind/bind 오류를 반환하도록 통합했다. 고정 포트와 성공 여부를 확인하지 않는 로그는 사용하지 않는다.
+- 캡처 실패 시 USB 복구를 자동 호출하지 않는다. 기존 캡처 timeout10s/skip30 및 데이터 검증을 유지한다. 복구 API의 실제 장치 리셋/복구 성공은 이번 병합에서 시험하지 않았다.
+- 합성 USB 부모 탐색 회귀를 추가했다. Windows 파일명 호환성 문제를 수정한 후 Rust39개, Python4개와 fmt/check/diff 검사 통과. 캡처 이미지·서버 로그·개인키/호스트키·임시 배포 파일은 업로드 대상에서 제외했다.
