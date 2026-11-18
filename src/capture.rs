@@ -1,8 +1,8 @@
+use image::RgbImage;
 use std::fs;
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
-use image::RgbImage;
 
 pub struct ScreenCapture {
     device_path: String,
@@ -11,37 +11,56 @@ pub struct ScreenCapture {
 }
 
 impl ScreenCapture {
-    /// 얼어붙은 캡처보드 USB 포트(1-1.1)를 강제 재연결하여 살려냄
-    pub fn recover_frozen_device(&self) {
-        eprintln!("⚠️ [경고] 캡처보드 응답 없음(동결 감지). USB 재연결로 리셋합니다...");
-        // 1. USB 연결 해제 (뽑는 효과)
-        let _ = std::fs::write("/sys/bus/usb/drivers/usb/unbind", "1-1.1\n");
-        std::thread::sleep(std::time::Duration::from_millis(800));
-
-        // 2. USB 재연결 (꽂는 효과)
-        let _ = std::fs::write("/sys/bus/usb/drivers/usb/bind", "1-1.1\n");
-        std::thread::sleep(std::time::Duration::from_millis(1500));
-        eprintln!("✅ 캡처보드 리셋 완료!");
+    /// Explicit USB rebind inherited from the remote recovery change.
+    /// Never called automatically on capture failure. A successful rebind still
+    /// requires a fresh capture/OCR check; it does not prove HDMI recovery.
+    pub fn recover_frozen_device(&self) -> Result<(), String> {
+        let name = self
+            .device_path
+            .strip_prefix("/dev/")
+            .filter(|name| {
+                name.strip_prefix("video").is_some_and(|index| {
+                    !index.is_empty() && index.bytes().all(|b| b.is_ascii_digit())
+                })
+            })
+            .ok_or("Expected a /dev/videoN capture device")?;
+        let device = fs::canonicalize(format!("/sys/class/video4linux/{name}/device"))
+            .map_err(|_| "Cannot resolve capture USB device")?;
+        let usb_id = capture_usb_id(&device)?;
+        fs::write("/sys/bus/usb/drivers/usb/unbind", usb_id.as_bytes())
+            .map_err(|_| "USB unbind failed; recovery was not confirmed")?;
+        thread::sleep(Duration::from_millis(800));
+        fs::write("/sys/bus/usb/drivers/usb/bind", usb_id.as_bytes())
+            .map_err(|_| "USB bind failed; capture device may remain disconnected")?;
+        thread::sleep(Duration::from_millis(1500));
+        Ok(())
     }
-
     // 캡처하고 있는 화면의 해상도 감지
-    pub fn detect_resolution(device_path: &str) -> Result<(u16, u16), String>{
-        let output = Command::new("v4l2-ctl")
+    pub fn detect_resolution(device_path: &str) -> Result<(u16, u16), String> {
+        let output = Command::new("timeout")
+            .args(["3s", "v4l2-ctl"])
             .arg(format!("--device={}", device_path))
             .arg("--get-fmt-video")
             .output()
             .map_err(|e| format!("Fail to execute v412-ctl: {}", e))?;
 
+        if !output.status.success() {
+            return Err(format!("Resolution detection failed: {}", output.status));
+        }
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         // 출력에서 Width/Height 줄을 찾아서 파싱
         for line in stdout.lines() {
             if line.contains("Width/Height") {
-                if let Some( dims ) = line.split(":").nth(1) {
+                if let Some(dims) = line.split(":").nth(1) {
                     let parts: Vec<&str> = dims.trim().split('/').collect();
                     if parts.len() == 2 {
-                        let w = parts[0].parse::<u16>().map_err(|_| "Failed to parse resoltuion")?;
-                        let h = parts[1].parse::<u16>().map_err(|_| "Failed to parse resoltuion")?;
+                        let w = parts[0]
+                            .parse::<u16>()
+                            .map_err(|_| "Failed to parse resoltuion")?;
+                        let h = parts[1]
+                            .parse::<u16>()
+                            .map_err(|_| "Failed to parse resoltuion")?;
                         return Ok((w, h));
                     }
                 }
@@ -58,38 +77,69 @@ impl ScreenCapture {
         }
     }
 
-    /// 화면 캡처후 메모리의 byte로
-    pub fn capture_raw(&self) -> Result<Vec<u8>, String> {
-        // 최대 2번 시도: 1번째 실패 시 리셋하고 2번째에 바로 다시 찍음!
-        for attempt in 1..=2 {
-            let output = std::process::Command::new("timeout")
-                .arg("3s") // 3초 동안 프레임 안 오면 동결로 간주
-                .arg("v4l2-ctl")
-                .arg(format!("--device={}", self.device_path))
-                .arg(format!("--set-fmt-video=width={},height={},pixelformat=MJPG", self.width, self.height))
-                .arg("--stream-mmap")
-                .arg("--stream-skip=3")
-                .arg("--stream-count=1")
-                .arg("--stream-to=-")
-                .output()
-                .map_err(|e| format!("v4l2-ctl 실행 실패: {}", e))?;
+    /// 캡처된 JPG 파일의 바이트 헤더를 읽어 실제 (가로, 세로) 픽셀 해상도를 반환
+    pub fn get_jpeg_resolution(jpg_path: &str) -> Result<(u16, u16), String> {
+        let bytes = fs::read(jpg_path).map_err(|e| format!("Failed to read JPG File: {}", e))?;
 
-            // 성공했으면 바이트 반환
-            if output.status.success() && !output.stdout.is_empty() {
-                return Ok(output.stdout);
+        let mut i = 0;
+        while i + 9 < bytes.len() {
+            // JPEG에서 프레임 시작 마커(SOF0: 0xFF 0xC0 또는 SOF2: 0xFF 0xC2)를 찾습니다.
+            if bytes[i] == 0xFF && (bytes[i + 1] == 0xC0 || bytes[i + 1] == 0xC2) {
+                // 마커 뒤 5~6번째 바이트가 세로(Height), 7~8번째 바이트가 가로(Width)입니다!
+                let height = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]);
+                let width = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]);
+                return Ok((width, height));
             }
-
-            // 실패/타임아웃 발생 시 캡처보드 리셋 후 재시도
-            if attempt == 1 {
-                self.recover_frozen_device();
-            }
+            i += 1;
         }
 
-        Err("캡처보드 자동 리셋 후에도 응답이 없습니다 (HDMI 케이블 또는 PC 전원 확인)".to_string())
+        Err("No valid JPEG Header.".to_string())
     }
 
-    
+    /// 화면 캡처후 메모리의 byte로
+    pub fn capture_raw(&self) -> Result<Vec<u8>, String> {
+        let fmt_arg = format!(
+            "--set-fmt-video=width={},height={},pixelformat=MJPG",
+            self.width, self.height
+        );
+        let device_arg = format!("--device={}", self.device_path);
 
+        // v4l2-ctl 실행
+        // --stream-mmap = 4: 스트림 받아 저장할 프레임 개수(Memory Map)
+        // Board startup emitted 8 incomplete frames in the USB trace.
+        // Discard 30 frames before reading one. A complex 1080p frame took
+        // 4.032s with this warm-up, so allow 10s instead of the old 3s.
+        // --stream-count = 1: 딱 1장만 촬영
+        let output = Command::new("timeout")
+            .arg("10s")
+            .arg("v4l2-ctl")
+            .arg("--silent")
+            .arg(&device_arg)
+            .arg(&fmt_arg)
+            .arg("--stream-mmap=4")
+            .arg("--stream-skip=30")
+            .arg("--stream-count=1")
+            .arg("--stream-to=-")
+            .output()
+            .map_err(|e| format!("Fail to execute v412-ctl: {}", e))?;
+
+        if !output.status.success() || output.stdout.is_empty() {
+            let err_msg = String::from_utf8_lossy(&output.stderr);
+            return Err(format!(
+                "Display Capture Error: status={}, bytes={}, detail={}",
+                output.status,
+                output.stdout.len(),
+                err_msg
+            ));
+        }
+
+        let image = image::load_from_memory(&output.stdout)
+            .map_err(|e| format!("Invalid capture JPEG: {e}"))?;
+        if image.width() != self.width || image.height() != self.height {
+            return Err("Capture resolution changed; recalibrate before input".into());
+        }
+        Ok(output.stdout)
+    }
 
     // // 현재 화면을 캡처하여 지정된 경로에 jpg로 저장하고 파일 크기를 반환
     // pub fn capture_to_file(&self, output_path: &str) -> Result<usize, String> {
@@ -154,12 +204,19 @@ impl ScreenCapture {
         while start.elapsed() < timeout {
             if let Ok(img) = self.capture_image() {
                 if check_fn(&img) {
-                    println!("Screen Check Success ({:.1} sec)", start.elapsed().as_secs_f32());
+                    println!(
+                        "Screen Check Success ({:.1} sec)",
+                        start.elapsed().as_secs_f32()
+                    );
 
                     return Ok(());
                 }
             }
-            println!("Wait for Screen Capture Image... ({:1}s / {}s)", start.elapsed().as_secs_f32(), timeout_secs);
+            println!(
+                "Wait for Screen Capture Image... ({:1}s / {}s)",
+                start.elapsed().as_secs_f32(),
+                timeout_secs
+            );
             thread::sleep(Duration::from_millis(500));
         }
         Err(format!("Timeout Error: No Screen Image."))
@@ -175,14 +232,20 @@ impl ScreenCapture {
     ) -> Result<(), String> {
         self.wait_until(timeout_secs, |current_img| {
             let diff_ratio = Self::calc_diff_percent(before_img, current_img);
-            println!("  -> Screen Change Ratio: {:.1}% / {:.1}%", diff_ratio, thershold_percent);
+            println!(
+                "  -> Screen Change Ratio: {:.1}% / {:.1}%",
+                diff_ratio, thershold_percent
+            );
             diff_ratio >= thershold_percent
         })
     }
 
     /// 두 이미지 픽셀 차이를 비교해 변화율 계산
     fn calc_diff_percent(img1: &RgbImage, img2: &RgbImage) -> f32 {
-        let (w, h) = (img1.width().min(img2.width()), img1.height().min(img2.height()));
+        let (w, h) = (
+            img1.width().min(img2.width()),
+            img1.height().min(img2.height()),
+        );
         let mut changed = 0u32;
         let mut total = 0u32;
 
@@ -193,8 +256,8 @@ impl ScreenCapture {
 
                 // R, G, B 차이 합이 45 이상이면 바뀐 픽셀로 판정
                 let diff = (p1[0] as i32 - p2[0] as i32).abs()
-                         + (p1[1] as i32 - p2[1] as i32).abs()
-                         + (p1[2] as i32 - p2[2] as i32).abs();
+                    + (p1[1] as i32 - p2[1] as i32).abs()
+                    + (p1[2] as i32 - p2[2] as i32).abs();
                 if diff > 45 {
                     changed += 1;
                 }
@@ -203,4 +266,34 @@ impl ScreenCapture {
         }
         (changed as f32 / total as f32) * 100.0
     }
+}
+
+fn capture_usb_id(device: &std::path::Path) -> Result<String, String> {
+    let usb = device
+        .ancestors()
+        .find(|p| p.join("idVendor").is_file() && p.join("idProduct").is_file())
+        .ok_or("No USB parent for capture device")?;
+    let id = usb
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or("Invalid capture USB identifier")?;
+    if !id.contains('-') || !id.bytes().all(|b| b.is_ascii_digit() || b"-.".contains(&b)) {
+        return Err("Invalid capture USB identifier".into());
+    }
+    Ok(id.into())
+}
+
+#[test]
+#[cfg(test)]
+fn usb_recovery_resolves_the_actual_capture_device_not_a_fixed_port() {
+    let root =
+        std::env::temp_dir().join(format!("windows-control-usb-parent-{}", std::process::id()));
+    let usb = root.join("1-1.2");
+    let interface = usb.join("video-interface");
+    std::fs::create_dir_all(&interface).unwrap();
+    std::fs::write(usb.join("idVendor"), "1234").unwrap();
+    std::fs::write(usb.join("idProduct"), "5678").unwrap();
+    assert_eq!(capture_usb_id(&interface).unwrap(), "1-1.2");
+    assert!(capture_usb_id(&root).is_err());
+    std::fs::remove_dir_all(root).unwrap();
 }

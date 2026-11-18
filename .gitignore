@@ -1,2 +1,12 @@
 /target
 *.jpg
+.ssh_known_hosts
+/ev-source.tar.gz
+/capture-probe.jpg
+/capture-probe.png
+__pycache__/
+/test-server.out.log
+/test-server.err.log
+/test-server.pid
+/test-server.log
+/test-server-error.log

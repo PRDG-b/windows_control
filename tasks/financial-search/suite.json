@@ -1,0 +1,746 @@
+{
+  "format": "windows-control.task-suite.v1",
+  "execution_status": "specification_only_not_executed",
+  "created_on": "2026-11-18",
+  "purpose": "Evaluate browser search, source discovery and evidence-grounded financial data collection. Not a replay CLI input.",
+  "run_context": {
+    "run_id": null,
+    "started_at_utc": null,
+    "as_of_utc": null,
+    "display_timezone": "Asia/Seoul",
+    "profile": "smoke"
+  },
+  "run_context_binding": "Bind run timestamps at execution. run_context.as_of_utc is a run reference, not a shared historical price cutoff. Never use created_on as the data date.",
+  "profiles": {
+    "smoke": {
+      "engine_ids": [
+        "google",
+        "bing",
+        "naver",
+        "duckduckgo"
+      ],
+      "metric_ids": [
+        "apple_aapl",
+        "bok_base_rate",
+        "cnn_fear_greed"
+      ],
+      "case_count": 12,
+      "total_deadline_seconds": 2400
+    },
+    "standard": {
+      "engine_ids": [
+        "google",
+        "bing",
+        "naver",
+        "duckduckgo"
+      ],
+      "metric_ids": [
+        "samsung_005930",
+        "apple_aapl",
+        "nvidia_nvda",
+        "bok_base_rate",
+        "fed_target_range",
+        "cnn_fear_greed"
+      ],
+      "case_count": 24,
+      "total_deadline_seconds": 4800
+    },
+    "extended": {
+      "engine_ids": [
+        "google",
+        "bing",
+        "naver",
+        "duckduckgo"
+      ],
+      "metric_ids": [
+        "samsung_005930",
+        "apple_aapl",
+        "nvidia_nvda",
+        "bok_base_rate",
+        "fed_target_range",
+        "cnn_fear_greed",
+        "crypto_fear_greed"
+      ],
+      "case_count": 28,
+      "total_deadline_seconds": 5600
+    }
+  },
+  "budgets": {
+    "case_deadline_seconds": 180,
+    "max_decisions_per_case": 20,
+    "max_query_variants": 3,
+    "max_source_pages_per_case": 3,
+    "hid_parallelism": 1
+  },
+  "policy": {
+    "interaction": "Target browser screenshots/OCR and HID; local development may simulate observations and actions with results labelled accordingly.",
+    "search_snippet_is_final_evidence": false,
+    "direct_source_shortcut_counts_as_search_success": false,
+    "oracle_visible_to_agent": false,
+    "auto_repeat_uncertain_input": false,
+    "login_or_captcha_bypass": false,
+    "financial_transactions": false,
+    "source_hints_are_not_answer_keys": true,
+    "same_publisher_across_engines_is_independent_corroboration": false
+  },
+  "session_steps": [
+    "open_assigned_search_and_recapture",
+    "verify_query_and_results",
+    "select_relevant_source_and_recapture",
+    "extract_identity_value_unit_and_data_time",
+    "validate_goal_specific_evidence",
+    "emit_result_or_abstain",
+    "reconcile_comparable_cross_engine_results"
+  ],
+  "success_contracts": {
+    "equity_quote": {
+      "required": [
+        "symbol_market_currency_match",
+        "quote_type_and_session_identified",
+        "value_read_from_source",
+        "source_url_and_frame_evidence",
+        "quote_time_and_timezone",
+        "latest_available_session_verified",
+        "delay_status_recorded"
+      ],
+      "reject_confusions": [
+        "preferred_or_ADR",
+        "previous_close_as_current_trade",
+        "bid_or_ask_as_last_price",
+        "after_hours_as_regular",
+        "collection_time_as_quote_time"
+      ]
+    },
+    "policy_rate": {
+      "required": [
+        "institution_and_rate_type_match",
+        "rate_level_percent",
+        "official_current_applicability_evidence",
+        "source_url_and_frame_evidence",
+        "effective_date_or_explicit_missing_status"
+      ],
+      "reject_confusions": [
+        "loan_rate",
+        "bond_yield",
+        "forecast",
+        "change_in_basis_points_as_level"
+      ]
+    },
+    "policy_rate_range": {
+      "required": [
+        "federal_funds_target_range_identity",
+        "lower_and_upper_percent",
+        "official_current_applicability_evidence",
+        "source_url_and_frame_evidence",
+        "effective_date_or_explicit_missing_status"
+      ],
+      "reject_confusions": [
+        "EFFR",
+        "dot_plot",
+        "forecast",
+        "range_midpoint_only",
+        "historical_statement_as_current"
+      ]
+    },
+    "sentiment_index": {
+      "required": [
+        "provider_market_and_index_match",
+        "current_value_0_to_100",
+        "classification_from_source",
+        "source_update_date_or_time",
+        "source_url_and_frame_evidence",
+        "current_vs_history_distinguished"
+      ],
+      "reject_confusions": [
+        "CNN_vs_crypto",
+        "yesterday_or_last_week",
+        "component_metric",
+        "observation_time_as_update_time"
+      ]
+    }
+  },
+  "engines": [
+    {
+      "id": "google",
+      "home_url": "https://www.google.com/",
+      "search_url_template": "https://www.google.com/search?q={query}"
+    },
+    {
+      "id": "bing",
+      "home_url": "https://www.bing.com/",
+      "search_url_template": "https://www.bing.com/search?q={query}"
+    },
+    {
+      "id": "naver",
+      "home_url": "https://search.naver.com/",
+      "search_url_template": "https://search.naver.com/search.naver?query={query}"
+    },
+    {
+      "id": "duckduckgo",
+      "home_url": "https://duckduckgo.com/",
+      "search_url_template": "https://duckduckgo.com/?q={query}&ia=web"
+    }
+  ],
+  "metrics": [
+    {
+      "id": "samsung_005930",
+      "kind": "equity_quote",
+      "optional": false,
+      "identity": {
+        "name": "Samsung Electronics common stock",
+        "symbol": "005930",
+        "market": "KRX",
+        "currency": "KRW"
+      },
+      "queries": [
+        "Samsung Electronics 005930 KRX latest stock price timestamp KRW",
+        "005930 regular session latest closing price date KRW",
+        "005930 stock quote Korea Exchange latest"
+      ],
+      "source_host_hints": [
+        "krx.co.kr",
+        "finance.naver.com"
+      ]
+    },
+    {
+      "id": "apple_aapl",
+      "kind": "equity_quote",
+      "optional": false,
+      "identity": {
+        "name": "Apple Inc. common stock",
+        "symbol": "AAPL",
+        "market": "NASDAQ",
+        "currency": "USD"
+      },
+      "queries": [
+        "AAPL NASDAQ latest stock price regular session timestamp USD",
+        "AAPL last closing price date Nasdaq",
+        "Apple AAPL quote regular after hours time"
+      ],
+      "source_host_hints": [
+        "nasdaq.com",
+        "finance.yahoo.com"
+      ]
+    },
+    {
+      "id": "nvidia_nvda",
+      "kind": "equity_quote",
+      "optional": false,
+      "identity": {
+        "name": "NVIDIA common stock",
+        "symbol": "NVDA",
+        "market": "NASDAQ",
+        "currency": "USD"
+      },
+      "queries": [
+        "NVDA NASDAQ latest stock price regular session timestamp USD",
+        "NVDA last closing price date Nasdaq",
+        "NVIDIA NVDA quote regular after hours time"
+      ],
+      "source_host_hints": [
+        "nasdaq.com",
+        "finance.yahoo.com"
+      ]
+    },
+    {
+      "id": "bok_base_rate",
+      "kind": "policy_rate",
+      "optional": false,
+      "identity": {
+        "name": "Bank of Korea Base Rate",
+        "institution": "Bank of Korea",
+        "unit": "percent"
+      },
+      "queries": [
+        "Bank of Korea current base rate effective date official",
+        "site:bok.or.kr current base rate monetary policy decision",
+        "한국은행 현재 기준금리 적용일"
+      ],
+      "source_host_hints": [
+        "bok.or.kr"
+      ]
+    },
+    {
+      "id": "fed_target_range",
+      "kind": "policy_rate_range",
+      "optional": false,
+      "identity": {
+        "name": "Federal funds target range",
+        "institution": "Federal Reserve",
+        "unit": "percent"
+      },
+      "queries": [
+        "Federal Reserve current federal funds target range effective date official",
+        "site:federalreserve.gov open market operations target range current",
+        "site:federalreserve.gov latest FOMC statement target range implementation note"
+      ],
+      "source_host_hints": [
+        "federalreserve.gov"
+      ]
+    },
+    {
+      "id": "cnn_fear_greed",
+      "kind": "sentiment_index",
+      "optional": false,
+      "identity": {
+        "name": "CNN Fear and Greed Index",
+        "provider": "CNN",
+        "market": "US equities",
+        "scale_min": 0,
+        "scale_max": 100
+      },
+      "queries": [
+        "CNN Fear and Greed Index current value last updated",
+        "site:cnn.com/markets/fear-and-greed current index",
+        "CNN stock market fear greed index latest update date"
+      ],
+      "source_host_hints": [
+        "cnn.com"
+      ]
+    },
+    {
+      "id": "crypto_fear_greed",
+      "kind": "sentiment_index",
+      "optional": true,
+      "identity": {
+        "name": "Alternative.me Crypto Fear and Greed Index",
+        "provider": "Alternative.me",
+        "market": "crypto",
+        "scale_min": 0,
+        "scale_max": 100
+      },
+      "queries": [
+        "Alternative.me Crypto Fear and Greed Index current latest update",
+        "site:alternative.me/crypto/fear-and-greed-index current value",
+        "Alternative.me Bitcoin fear greed current index timestamp"
+      ],
+      "source_host_hints": [
+        "alternative.me"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "google__samsung_005930",
+      "engine_id": "google",
+      "metric_id": "samsung_005930",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Samsung Electronics common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.google.com/search?q=Samsung%20Electronics%20005930%20KRX%20latest%20stock%20price%20timestamp%20KRW",
+        "https://www.google.com/search?q=005930%20regular%20session%20latest%20closing%20price%20date%20KRW",
+        "https://www.google.com/search?q=005930%20stock%20quote%20Korea%20Exchange%20latest"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "google__apple_aapl",
+      "engine_id": "google",
+      "metric_id": "apple_aapl",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Apple Inc. common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.google.com/search?q=AAPL%20NASDAQ%20latest%20stock%20price%20regular%20session%20timestamp%20USD",
+        "https://www.google.com/search?q=AAPL%20last%20closing%20price%20date%20Nasdaq",
+        "https://www.google.com/search?q=Apple%20AAPL%20quote%20regular%20after%20hours%20time"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "google__nvidia_nvda",
+      "engine_id": "google",
+      "metric_id": "nvidia_nvda",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for NVIDIA common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.google.com/search?q=NVDA%20NASDAQ%20latest%20stock%20price%20regular%20session%20timestamp%20USD",
+        "https://www.google.com/search?q=NVDA%20last%20closing%20price%20date%20Nasdaq",
+        "https://www.google.com/search?q=NVIDIA%20NVDA%20quote%20regular%20after%20hours%20time"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "google__bok_base_rate",
+      "engine_id": "google",
+      "metric_id": "bok_base_rate",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Bank of Korea Base Rate as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.google.com/search?q=Bank%20of%20Korea%20current%20base%20rate%20effective%20date%20official",
+        "https://www.google.com/search?q=site%3Abok.or.kr%20current%20base%20rate%20monetary%20policy%20decision",
+        "https://www.google.com/search?q=%ED%95%9C%EA%B5%AD%EC%9D%80%ED%96%89%20%ED%98%84%EC%9E%AC%20%EA%B8%B0%EC%A4%80%EA%B8%88%EB%A6%AC%20%EC%A0%81%EC%9A%A9%EC%9D%BC"
+      ],
+      "success_contract_id": "policy_rate",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "google__fed_target_range",
+      "engine_id": "google",
+      "metric_id": "fed_target_range",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Federal funds target range as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.google.com/search?q=Federal%20Reserve%20current%20federal%20funds%20target%20range%20effective%20date%20official",
+        "https://www.google.com/search?q=site%3Afederalreserve.gov%20open%20market%20operations%20target%20range%20current",
+        "https://www.google.com/search?q=site%3Afederalreserve.gov%20latest%20FOMC%20statement%20target%20range%20implementation%20note"
+      ],
+      "success_contract_id": "policy_rate_range",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "google__cnn_fear_greed",
+      "engine_id": "google",
+      "metric_id": "cnn_fear_greed",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for CNN Fear and Greed Index as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.google.com/search?q=CNN%20Fear%20and%20Greed%20Index%20current%20value%20last%20updated",
+        "https://www.google.com/search?q=site%3Acnn.com%2Fmarkets%2Ffear-and-greed%20current%20index",
+        "https://www.google.com/search?q=CNN%20stock%20market%20fear%20greed%20index%20latest%20update%20date"
+      ],
+      "success_contract_id": "sentiment_index",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "google__crypto_fear_greed",
+      "engine_id": "google",
+      "metric_id": "crypto_fear_greed",
+      "optional": true,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Alternative.me Crypto Fear and Greed Index as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.google.com/search?q=Alternative.me%20Crypto%20Fear%20and%20Greed%20Index%20current%20latest%20update",
+        "https://www.google.com/search?q=site%3Aalternative.me%2Fcrypto%2Ffear-and-greed-index%20current%20value",
+        "https://www.google.com/search?q=Alternative.me%20Bitcoin%20fear%20greed%20current%20index%20timestamp"
+      ],
+      "success_contract_id": "sentiment_index",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "bing__samsung_005930",
+      "engine_id": "bing",
+      "metric_id": "samsung_005930",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Samsung Electronics common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.bing.com/search?q=Samsung%20Electronics%20005930%20KRX%20latest%20stock%20price%20timestamp%20KRW",
+        "https://www.bing.com/search?q=005930%20regular%20session%20latest%20closing%20price%20date%20KRW",
+        "https://www.bing.com/search?q=005930%20stock%20quote%20Korea%20Exchange%20latest"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "bing__apple_aapl",
+      "engine_id": "bing",
+      "metric_id": "apple_aapl",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Apple Inc. common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.bing.com/search?q=AAPL%20NASDAQ%20latest%20stock%20price%20regular%20session%20timestamp%20USD",
+        "https://www.bing.com/search?q=AAPL%20last%20closing%20price%20date%20Nasdaq",
+        "https://www.bing.com/search?q=Apple%20AAPL%20quote%20regular%20after%20hours%20time"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "bing__nvidia_nvda",
+      "engine_id": "bing",
+      "metric_id": "nvidia_nvda",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for NVIDIA common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.bing.com/search?q=NVDA%20NASDAQ%20latest%20stock%20price%20regular%20session%20timestamp%20USD",
+        "https://www.bing.com/search?q=NVDA%20last%20closing%20price%20date%20Nasdaq",
+        "https://www.bing.com/search?q=NVIDIA%20NVDA%20quote%20regular%20after%20hours%20time"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "bing__bok_base_rate",
+      "engine_id": "bing",
+      "metric_id": "bok_base_rate",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Bank of Korea Base Rate as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.bing.com/search?q=Bank%20of%20Korea%20current%20base%20rate%20effective%20date%20official",
+        "https://www.bing.com/search?q=site%3Abok.or.kr%20current%20base%20rate%20monetary%20policy%20decision",
+        "https://www.bing.com/search?q=%ED%95%9C%EA%B5%AD%EC%9D%80%ED%96%89%20%ED%98%84%EC%9E%AC%20%EA%B8%B0%EC%A4%80%EA%B8%88%EB%A6%AC%20%EC%A0%81%EC%9A%A9%EC%9D%BC"
+      ],
+      "success_contract_id": "policy_rate",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "bing__fed_target_range",
+      "engine_id": "bing",
+      "metric_id": "fed_target_range",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Federal funds target range as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.bing.com/search?q=Federal%20Reserve%20current%20federal%20funds%20target%20range%20effective%20date%20official",
+        "https://www.bing.com/search?q=site%3Afederalreserve.gov%20open%20market%20operations%20target%20range%20current",
+        "https://www.bing.com/search?q=site%3Afederalreserve.gov%20latest%20FOMC%20statement%20target%20range%20implementation%20note"
+      ],
+      "success_contract_id": "policy_rate_range",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "bing__cnn_fear_greed",
+      "engine_id": "bing",
+      "metric_id": "cnn_fear_greed",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for CNN Fear and Greed Index as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.bing.com/search?q=CNN%20Fear%20and%20Greed%20Index%20current%20value%20last%20updated",
+        "https://www.bing.com/search?q=site%3Acnn.com%2Fmarkets%2Ffear-and-greed%20current%20index",
+        "https://www.bing.com/search?q=CNN%20stock%20market%20fear%20greed%20index%20latest%20update%20date"
+      ],
+      "success_contract_id": "sentiment_index",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "bing__crypto_fear_greed",
+      "engine_id": "bing",
+      "metric_id": "crypto_fear_greed",
+      "optional": true,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Alternative.me Crypto Fear and Greed Index as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://www.bing.com/search?q=Alternative.me%20Crypto%20Fear%20and%20Greed%20Index%20current%20latest%20update",
+        "https://www.bing.com/search?q=site%3Aalternative.me%2Fcrypto%2Ffear-and-greed-index%20current%20value",
+        "https://www.bing.com/search?q=Alternative.me%20Bitcoin%20fear%20greed%20current%20index%20timestamp"
+      ],
+      "success_contract_id": "sentiment_index",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "naver__samsung_005930",
+      "engine_id": "naver",
+      "metric_id": "samsung_005930",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Samsung Electronics common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://search.naver.com/search.naver?query=Samsung%20Electronics%20005930%20KRX%20latest%20stock%20price%20timestamp%20KRW",
+        "https://search.naver.com/search.naver?query=005930%20regular%20session%20latest%20closing%20price%20date%20KRW",
+        "https://search.naver.com/search.naver?query=005930%20stock%20quote%20Korea%20Exchange%20latest"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "naver__apple_aapl",
+      "engine_id": "naver",
+      "metric_id": "apple_aapl",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Apple Inc. common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://search.naver.com/search.naver?query=AAPL%20NASDAQ%20latest%20stock%20price%20regular%20session%20timestamp%20USD",
+        "https://search.naver.com/search.naver?query=AAPL%20last%20closing%20price%20date%20Nasdaq",
+        "https://search.naver.com/search.naver?query=Apple%20AAPL%20quote%20regular%20after%20hours%20time"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "naver__nvidia_nvda",
+      "engine_id": "naver",
+      "metric_id": "nvidia_nvda",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for NVIDIA common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://search.naver.com/search.naver?query=NVDA%20NASDAQ%20latest%20stock%20price%20regular%20session%20timestamp%20USD",
+        "https://search.naver.com/search.naver?query=NVDA%20last%20closing%20price%20date%20Nasdaq",
+        "https://search.naver.com/search.naver?query=NVIDIA%20NVDA%20quote%20regular%20after%20hours%20time"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "naver__bok_base_rate",
+      "engine_id": "naver",
+      "metric_id": "bok_base_rate",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Bank of Korea Base Rate as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://search.naver.com/search.naver?query=Bank%20of%20Korea%20current%20base%20rate%20effective%20date%20official",
+        "https://search.naver.com/search.naver?query=site%3Abok.or.kr%20current%20base%20rate%20monetary%20policy%20decision",
+        "https://search.naver.com/search.naver?query=%ED%95%9C%EA%B5%AD%EC%9D%80%ED%96%89%20%ED%98%84%EC%9E%AC%20%EA%B8%B0%EC%A4%80%EA%B8%88%EB%A6%AC%20%EC%A0%81%EC%9A%A9%EC%9D%BC"
+      ],
+      "success_contract_id": "policy_rate",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "naver__fed_target_range",
+      "engine_id": "naver",
+      "metric_id": "fed_target_range",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Federal funds target range as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://search.naver.com/search.naver?query=Federal%20Reserve%20current%20federal%20funds%20target%20range%20effective%20date%20official",
+        "https://search.naver.com/search.naver?query=site%3Afederalreserve.gov%20open%20market%20operations%20target%20range%20current",
+        "https://search.naver.com/search.naver?query=site%3Afederalreserve.gov%20latest%20FOMC%20statement%20target%20range%20implementation%20note"
+      ],
+      "success_contract_id": "policy_rate_range",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "naver__cnn_fear_greed",
+      "engine_id": "naver",
+      "metric_id": "cnn_fear_greed",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for CNN Fear and Greed Index as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://search.naver.com/search.naver?query=CNN%20Fear%20and%20Greed%20Index%20current%20value%20last%20updated",
+        "https://search.naver.com/search.naver?query=site%3Acnn.com%2Fmarkets%2Ffear-and-greed%20current%20index",
+        "https://search.naver.com/search.naver?query=CNN%20stock%20market%20fear%20greed%20index%20latest%20update%20date"
+      ],
+      "success_contract_id": "sentiment_index",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "naver__crypto_fear_greed",
+      "engine_id": "naver",
+      "metric_id": "crypto_fear_greed",
+      "optional": true,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Alternative.me Crypto Fear and Greed Index as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://search.naver.com/search.naver?query=Alternative.me%20Crypto%20Fear%20and%20Greed%20Index%20current%20latest%20update",
+        "https://search.naver.com/search.naver?query=site%3Aalternative.me%2Fcrypto%2Ffear-and-greed-index%20current%20value",
+        "https://search.naver.com/search.naver?query=Alternative.me%20Bitcoin%20fear%20greed%20current%20index%20timestamp"
+      ],
+      "success_contract_id": "sentiment_index",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "duckduckgo__samsung_005930",
+      "engine_id": "duckduckgo",
+      "metric_id": "samsung_005930",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Samsung Electronics common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://duckduckgo.com/?q=Samsung%20Electronics%20005930%20KRX%20latest%20stock%20price%20timestamp%20KRW&ia=web",
+        "https://duckduckgo.com/?q=005930%20regular%20session%20latest%20closing%20price%20date%20KRW&ia=web",
+        "https://duckduckgo.com/?q=005930%20stock%20quote%20Korea%20Exchange%20latest&ia=web"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "duckduckgo__apple_aapl",
+      "engine_id": "duckduckgo",
+      "metric_id": "apple_aapl",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Apple Inc. common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://duckduckgo.com/?q=AAPL%20NASDAQ%20latest%20stock%20price%20regular%20session%20timestamp%20USD&ia=web",
+        "https://duckduckgo.com/?q=AAPL%20last%20closing%20price%20date%20Nasdaq&ia=web",
+        "https://duckduckgo.com/?q=Apple%20AAPL%20quote%20regular%20after%20hours%20time&ia=web"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "duckduckgo__nvidia_nvda",
+      "engine_id": "duckduckgo",
+      "metric_id": "nvidia_nvda",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for NVIDIA common stock as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://duckduckgo.com/?q=NVDA%20NASDAQ%20latest%20stock%20price%20regular%20session%20timestamp%20USD&ia=web",
+        "https://duckduckgo.com/?q=NVDA%20last%20closing%20price%20date%20Nasdaq&ia=web",
+        "https://duckduckgo.com/?q=NVIDIA%20NVDA%20quote%20regular%20after%20hours%20time&ia=web"
+      ],
+      "success_contract_id": "equity_quote",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "duckduckgo__bok_base_rate",
+      "engine_id": "duckduckgo",
+      "metric_id": "bok_base_rate",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Bank of Korea Base Rate as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://duckduckgo.com/?q=Bank%20of%20Korea%20current%20base%20rate%20effective%20date%20official&ia=web",
+        "https://duckduckgo.com/?q=site%3Abok.or.kr%20current%20base%20rate%20monetary%20policy%20decision&ia=web",
+        "https://duckduckgo.com/?q=%ED%95%9C%EA%B5%AD%EC%9D%80%ED%96%89%20%ED%98%84%EC%9E%AC%20%EA%B8%B0%EC%A4%80%EA%B8%88%EB%A6%AC%20%EC%A0%81%EC%9A%A9%EC%9D%BC&ia=web"
+      ],
+      "success_contract_id": "policy_rate",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "duckduckgo__fed_target_range",
+      "engine_id": "duckduckgo",
+      "metric_id": "fed_target_range",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Federal funds target range as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://duckduckgo.com/?q=Federal%20Reserve%20current%20federal%20funds%20target%20range%20effective%20date%20official&ia=web",
+        "https://duckduckgo.com/?q=site%3Afederalreserve.gov%20open%20market%20operations%20target%20range%20current&ia=web",
+        "https://duckduckgo.com/?q=site%3Afederalreserve.gov%20latest%20FOMC%20statement%20target%20range%20implementation%20note&ia=web"
+      ],
+      "success_contract_id": "policy_rate_range",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "duckduckgo__cnn_fear_greed",
+      "engine_id": "duckduckgo",
+      "metric_id": "cnn_fear_greed",
+      "optional": false,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for CNN Fear and Greed Index as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://duckduckgo.com/?q=CNN%20Fear%20and%20Greed%20Index%20current%20value%20last%20updated&ia=web",
+        "https://duckduckgo.com/?q=site%3Acnn.com%2Fmarkets%2Ffear-and-greed%20current%20index&ia=web",
+        "https://duckduckgo.com/?q=CNN%20stock%20market%20fear%20greed%20index%20latest%20update%20date&ia=web"
+      ],
+      "success_contract_id": "sentiment_index",
+      "result_contract": "result-template.json"
+    },
+    {
+      "id": "duckduckgo__crypto_fear_greed",
+      "engine_id": "duckduckgo",
+      "metric_id": "crypto_fear_greed",
+      "optional": true,
+      "user_goal": "Use the assigned search engine to find and verify the latest available value for Alternative.me Crypto Fear and Greed Index as of case_context.as_of_utc (the source observation time). Record identity, value, unit, source data time, source URL and frame evidence. Abstain when evidence is insufficient.",
+      "search_urls": [
+        "https://duckduckgo.com/?q=Alternative.me%20Crypto%20Fear%20and%20Greed%20Index%20current%20latest%20update&ia=web",
+        "https://duckduckgo.com/?q=site%3Aalternative.me%2Fcrypto%2Ffear-and-greed-index%20current%20value&ia=web",
+        "https://duckduckgo.com/?q=Alternative.me%20Bitcoin%20fear%20greed%20current%20index%20timestamp&ia=web"
+      ],
+      "success_contract_id": "sentiment_index",
+      "result_contract": "result-template.json"
+    }
+  ],
+  "cross_engine_validation": {
+    "compare_keys": [
+      "metric_id",
+      "provider",
+      "market",
+      "unit",
+      "quote_type",
+      "session",
+      "source_data_time"
+    ],
+    "deduplicate_by_original_publisher": true,
+    "average_conflicting_values": false,
+    "unresolved_status": "conflict"
+  },
+  "status_values": [
+    "verified",
+    "partial",
+    "blocked",
+    "conflict",
+    "failed"
+  ],
+  "freshness_values": [
+    "current",
+    "stale",
+    "unknown"
+  ],
+  "case_context_binding": {
+    "as_of_policy": "latest_available_at_source_observation",
+    "as_of_utc": "Bind to source observation time for each case. Keep quote/update/effective times separate. Rechecks are new evidence records; do not overwrite prior observations."
+  }
+}
