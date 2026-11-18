@@ -21,7 +21,7 @@ pub fn unlock_screen(agent: &mut KvmAgent, pin: &str) -> Result<(), String> {
     let jpeg_bytes = agent.cam.capture_raw()?;
 
     // 스트림 데이터 처리
-    ocr::run_ocr_from_memory(jpeg_bytes)
+    // ocr::run_ocr_from_memory(jpeg_bytes)
     // agent.act_and_wait(5.0, 5, |a| a.hid.send_key(MOD_NONE, KEY_SPACE, 0))?;
 
     // PIN 타이핑 후 엔터
