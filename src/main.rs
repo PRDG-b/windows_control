@@ -2,6 +2,11 @@ use std::time::{Duration, Instant};
 use windows_control::{HidController, ScreenCapture, ocr, task, validation};
 
 fn main() {
+    // let rec = rerun::RecordingStreamBuilder::new("windows_control")
+    //     .connect_grpc_opts("rerun+http://192.168.0.20:9876/proxy");
+
+    // let jpeg = std::fs::read("capture.jpg");
+
     if let Err(error) = run() {
         eprintln!("ERROR: {error}");
         std::process::exit(1);

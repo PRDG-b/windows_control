@@ -54,7 +54,7 @@ impl HidController {
         });
 
         // 후속 동작 위해 잠시 대기
-        thread::sleep(Duration::from_millis(200));
+        thread::sleep(Duration::from_millis(80));
     }
 
     // 핵심: 파일을 구조체에 계속 들고 있지 않고, 쓸 때만 잠깐 열었다가

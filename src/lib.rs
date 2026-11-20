@@ -12,6 +12,7 @@ pub mod overlay;
 pub mod replay;
 pub mod task;
 pub mod validation;
+pub mod logging;
 
 pub use capture::ScreenCapture;
 pub use hid::HidController;

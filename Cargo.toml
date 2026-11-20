@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
+rerun = { version = "=0.43.2", default-features = false, features = ["sdk"] }
+
+[profile.dev.package."*"]
+opt-level = 2
