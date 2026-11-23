@@ -45,6 +45,16 @@ pub trait Environment {
     fn act(&mut self, candidate: &Candidate) -> Result<(), String>;
     fn restore(&mut self) -> Result<(), String>;
     fn pause(&mut self) {}
+
+    // Rerun 등의 모니터링 위한 훅( 기본은 no-op )
+    fn on_step(
+        &mut self,
+        _step: i64,
+        _graph: &Graph,
+        _current_state: &str,
+        _event: &str,
+        _click: Option<(u16, u16)>,
+    ) {}
 }
 
 pub struct Limits {
@@ -489,6 +499,14 @@ impl<E: Environment> Runner<'_, E> {
                 EdgeOutcome::Transition
             };
             self.report.graph.edges.push(edge);
+            self.env.on_step(
+                self.report.observed_frames as i64,
+                &self.report.graph,
+                &next_state,
+                "transition",
+                Some(candidate.point()),
+            );
+            
             current = self.restore(&root)?;
         }
         Ok(())

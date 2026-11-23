@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 rerun = { version = "=0.43.2", default-features = false, features = ["sdk"] }
+uuid = { version = "1.29.3", features = ["v4"] }
 
 [profile.dev.package."*"]
 opt-level = 2

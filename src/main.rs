@@ -2,15 +2,20 @@ use std::time::{Duration, Instant};
 use windows_control::{HidController, ScreenCapture, ocr, task, validation};
 
 fn main() {
-    // let rec = rerun::RecordingStreamBuilder::new("windows_control")
-    //     .connect_grpc_opts("rerun+http://192.168.0.20:9876/proxy");
-
-    // let jpeg = std::fs::read("capture.jpg");
-
     if let Err(error) = run() {
         eprintln!("ERROR: {error}");
         std::process::exit(1);
     }
+}
+
+fn connect_rerun(url: impl Into<String>) -> Option<rerun::RecordingStream> {
+    let rec = rerun::RecordingStreamBuilder::new("windows_control")
+        .connect_grpc_opts(url)
+        .inspect_err(|err| {
+            eprintln!("Rerun Connection Error: {err}");
+        })
+        .ok();
+    rec
 }
 
 fn run() -> Result<(), String> {
@@ -28,7 +33,8 @@ fn run() -> Result<(), String> {
             return Err("Usage: explore-test-web <new-directory> <max-probes>".into());
         }
         let max_probes = args[2].parse::<usize>().map_err(|_| "Invalid max-probes")?;
-        return windows_control::exploration_web::run(std::path::Path::new(&args[1]), max_probes);
+        let rec = connect_rerun("rerun+http://192.168.0.20:9876/proxy");
+        return windows_control::exploration_web::run(std::path::Path::new(&args[1]), max_probes, rec);
     }
     if command == "explore-demo" {
         if !(2..=3).contains(&args.len()) {

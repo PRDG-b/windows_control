@@ -11,6 +11,7 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+use uuid::{Uuid, uuid};
 
 pub fn scene_from_ocr(observation: Observation) -> Scene {
     let has = |s: &str| {
@@ -118,9 +119,13 @@ pub fn scene_from_ocr(observation: Observation) -> Scene {
     }
 }
 
-pub fn run(dir: &Path, max_probes: usize) -> Result<(), String> {
+pub fn run(dir: &Path, max_probes: usize, rerun:Option<rerun::RecordingStream>) -> Result<(), String> {
     if !(1..=30).contains(&max_probes) {
         return Err("max-probes must be 1..30".into());
+    }
+    if dir.iter().last().unwrap() == "--" {
+        let hash = Uuid::new_v4().simple().to_string();
+        std::fs::create_dir(dir + ).map_err(|_| "Output directory must be new")?;
     }
     std::fs::create_dir(dir).map_err(|_| "Output directory must be new")?;
     let _guard = InputGuard::acquire(&std::env::temp_dir().join("windows-control-hid.lock"))?;
@@ -134,6 +139,8 @@ pub fn run(dir: &Path, max_probes: usize) -> Result<(), String> {
         id: 0,
         dir: dir.into(),
         require_root: true,
+        latest_jpeg: Vec::new(),
+        rerun: rerun,
     };
     let limits = Limits {
         max_probes,
@@ -163,6 +170,8 @@ struct Web {
     id: u64,
     dir: PathBuf,
     require_root: bool,
+    latest_jpeg: Vec<u8>,
+    rerun: Option<rerun::RecordingStream>,
 }
 impl Environment for Web {
     fn now(&self) -> Duration {
@@ -176,6 +185,7 @@ impl Environment for Web {
             .map_err(|_| "Capture decode failed")?
             .save(self.dir.join(format!("frame-{:04}.jpg", self.id)))
             .map_err(|_| "Cannot save capture")?;
+        self.latest_jpeg = raw.clone(); // 정상 처리된 바이트 복제
         let boxes = ocr::parse_tsv(&ocr::run_ocr_from_memory(&raw)?)?;
         let mut scene = scene_from_ocr(Observation {
             frame_id: self.id,
@@ -210,5 +220,36 @@ impl Environment for Web {
     }
     fn pause(&mut self) {
         std::thread::sleep(Duration::from_millis(200));
+    }
+    fn on_step(
+        &mut self,
+        _step: i64,
+        _graph: &Graph,
+        _current_state: &str,
+        _event: &str,
+        _click: Option<(u16, u16)>,
+    )
+    {
+        if let Some(rec) = &self.rerun {
+            let mut edges = Vec::new();
+            for e in &_graph.edges {
+                if let Some(to) = e.to {
+                    if e.outcome == EdgeOutcome::Transition {
+                        edges.push((_graph.nodes[e.from].state.as_str(), _graph.nodes[to].state.as_str()));
+                    }
+                }
+            }
+
+            let click_pos = _click.map(|(x, y)| [x as f32, y as f32]);
+            let _ = crate::logging::log_step(
+                rec,
+                _step,
+                &self.latest_jpeg,
+                &_graph,
+                _current_state,
+                _event,
+                click_pos,
+            );
+        }
     }
 }
