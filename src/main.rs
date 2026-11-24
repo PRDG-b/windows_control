@@ -34,7 +34,10 @@ fn run() -> Result<(), String> {
         }
         let max_probes = args[2].parse::<usize>().map_err(|_| "Invalid max-probes")?;
         let rec = connect_rerun("rerun+http://192.168.0.20:9876/proxy");
-        return windows_control::exploration_web::run(std::path::Path::new(&args[1]), max_probes, rec);
+        let path_buf = std::path::Path::new(".rerun").join(&args[1]);
+        let path = path_buf.as_path();
+
+        return windows_control::exploration_web::run(path, max_probes, rec);
     }
     if command == "explore-demo" {
         if !(2..=3).contains(&args.len()) {

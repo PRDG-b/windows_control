@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-use uuid::{Uuid, uuid};
+use uuid::Uuid;
 
 pub fn scene_from_ocr(observation: Observation) -> Scene {
     let has = |s: &str| {
@@ -123,11 +123,19 @@ pub fn run(dir: &Path, max_probes: usize, rerun:Option<rerun::RecordingStream>) 
     if !(1..=30).contains(&max_probes) {
         return Err("max-probes must be 1..30".into());
     }
-    if dir.iter().last().unwrap() == "--" {
+    let output_dir = if dir.file_name().is_some_and(|name| name == "--") {
         let hash = Uuid::new_v4().simple().to_string();
-        std::fs::create_dir(dir + ).map_err(|_| "Output directory must be new")?;
-    }
-    std::fs::create_dir(dir).map_err(|_| "Output directory must be new")?;
+
+        dir.parent()
+            .unwrap_or(Path::new("."))
+            .join(hash)
+    } else {
+        dir.to_path_buf()
+    };
+    
+    println!("Path: {}", output_dir.display());
+
+    std::fs::create_dir(&output_dir).map_err(|err| format!("Error: {err}"))?;
     let _guard = InputGuard::acquire(&std::env::temp_dir().join("windows-control-hid.lock"))?;
     let (width, height) = ScreenCapture::detect_resolution("/dev/video0")?;
     let mut env = Web {
@@ -137,7 +145,7 @@ pub fn run(dir: &Path, max_probes: usize, rerun:Option<rerun::RecordingStream>) 
         height,
         start: Instant::now(),
         id: 0,
-        dir: dir.into(),
+        dir: output_dir,
         require_root: true,
         latest_jpeg: Vec::new(),
         rerun: rerun,
@@ -150,7 +158,7 @@ pub fn run(dir: &Path, max_probes: usize, rerun:Option<rerun::RecordingStream>) 
     // Initial observation must show success/ready. The caller opens and verifies
     // this test page first; an arbitrary foreground application is never probed.
     let report = explore(&mut env, &limits);
-    write_report(&report, dir, true)?;
+    write_report(&report, &env.dir, true)?;
     if report.stop == Stop::Complete {
         Ok(())
     } else {

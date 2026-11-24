@@ -10,3 +10,4 @@ __pycache__/
 /test-server.pid
 /test-server.log
 /test-server-error.log
+.rerun
