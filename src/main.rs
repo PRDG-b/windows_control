@@ -28,6 +28,16 @@ fn run() -> Result<(), String> {
         usage();
         return Ok(());
     }
+    if command == "explore-browser" {
+        if args.len() != 3 {
+            return Err(
+                "Usage: explore-browser <new-directory> <max-probes> (isolated test container)"
+                    .into(),
+            );
+        }
+        let probes = args[2].parse().map_err(|_| "Invalid max-probes")?;
+        return windows_control::exploration_browser::run(std::path::Path::new(&args[1]), probes);
+    }
     if command == "explore-test-web" {
         if args.len() != 3 {
             return Err("Usage: explore-test-web <new-directory> <max-probes>".into());
@@ -240,6 +250,9 @@ fn run() -> Result<(), String> {
 }
 
 fn usage() {
+    println!(
+        "windows_control explore-browser <new-directory> <max-probes>\n  Disposable headless browser: screenshots/OCR only; no Pi or HID. Run in test container.\n"
+    );
     println!(
         "windows_control explore-test-web <new-directory> <max-probes>\n  REAL HID exploration of the repository test page only. Open/verify success READY first.\n"
     );

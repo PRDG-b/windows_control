@@ -11,3 +11,5 @@ __pycache__/
 /test-server.log
 /test-server-error.log
 .rerun
+diagnostics/browser-run*
+diagnostics/huggingface*

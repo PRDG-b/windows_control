@@ -1,0 +1,56 @@
+﻿<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Workspace</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 48px; background: white; color: #111;
+         font: 30px Arial, sans-serif; }
+  h1 { font-size: 40px; margin: 0 0 40px; }
+  p { margin: 0 0 32px; }
+  button { display: block; width: 280px; height: 78px; margin: 0 0 32px;
+           border: 2px solid #111; border-radius: 0; background: white;
+           color: #111; font: 30px Arial, sans-serif; cursor: pointer; }
+</style>
+<main></main>
+<script>
+  // This is an evaluator record, never a source for agent decisions.
+  const oracleStorageKey = 'fixtureEvaluator';
+  window.testOracle = JSON.parse(sessionStorage.getItem(oracleStorageKey)) ||
+    {phase: 'root', rootClicks: 0, browseClicks: 0,
+     preferencesClicks: 0, expandClicks: 0, history: []};
+  const main = document.querySelector('main');
+  function render(phase) {
+    window.testOracle.phase = phase;
+    if (phase === 'root') {
+      main.innerHTML = '<h1>Workspace</h1><button>Browse</button><button>Preferences</button>';
+      const buttons = main.querySelectorAll('button');
+      buttons[0].onclick = () => {
+        window.testOracle.rootClicks++;
+        window.testOracle.browseClicks++;
+        window.testOracle.history.push('Browse');
+        render('browse');
+      };
+      buttons[1].onclick = () => {
+        window.testOracle.rootClicks++;
+        window.testOracle.preferencesClicks++;
+        window.testOracle.history.push('Preferences');
+        render('preferences');
+      };
+    } else if (phase === 'browse') {
+      main.innerHTML = '<h1>Details</h1><button>Expand</button>';
+      main.querySelector('button').onclick = () => {
+        window.testOracle.expandClicks++;
+        window.testOracle.history.push('Expand');
+        render('expanded');
+      };
+    } else if (phase === 'expanded') {
+      main.innerHTML = '<h1>Details</h1><p>Additional information</p>';
+    } else {
+      main.innerHTML = '<h1>Preferences</h1><p>Display options</p>';
+    }
+    sessionStorage.setItem(oracleStorageKey, JSON.stringify(window.testOracle));
+  }
+  render('root');
+</script>
+</html>
