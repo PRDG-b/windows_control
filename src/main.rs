@@ -61,6 +61,25 @@ fn run() -> Result<(), String> {
             args.get(2).map(String::as_str).unwrap_or("normal"),
         );
     }
+    if command == "build-dom" {
+        if !(3..=4).contains(&args.len()) {
+            return Err(
+                "Usage: build-dom <new-directory> <max-interactions> [esc|ctrl-r|none]".into(),
+            );
+        }
+        let max_interactions = args[2]
+            .parse::<usize>()
+            .map_err(|_| "Invalid max-interactions")?;
+        let restore_mode = match args.get(3) {
+            Some(raw) => windows_control::visual_dom_live::RestoreMode::parse(raw)?,
+            None => windows_control::visual_dom_live::RestoreMode::Esc,
+        };
+        return windows_control::visual_dom_live::run(
+            std::path::Path::new(&args[1]),
+            max_interactions,
+            restore_mode,
+        );
+    }
     if command == "replay" {
         if args.len() != 2 {
             return Err("Usage: replay <scenario.replay>".into());
@@ -250,6 +269,9 @@ fn run() -> Result<(), String> {
 }
 
 fn usage() {
+    println!(
+        "windows_control build-dom <new-directory> <max-interactions> [esc|ctrl-r|none]\n  App-agnostic HDMI/OCR + USB HID DOM tree builder (0 = observe-only, 1..30 = live HID).\n"
+    );
     println!(
         "windows_control explore-browser <new-directory> <max-probes>\n  Disposable headless browser: screenshots/OCR only; no Pi or HID. Run in test container.\n"
     );

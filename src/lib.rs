@@ -18,6 +18,7 @@ pub mod screen_output;
 pub mod task;
 pub mod validation;
 pub mod visual_dom;
+pub mod visual_dom_live;
 
 pub use capture::ScreenCapture;
 pub use hid::HidController;
